@@ -1,3 +1,5 @@
+#include <iostream>
+#include <unistd.h>
 #include <string.h> 
 #include <sys/types.h> 
 #include <sys/socket.h> 
@@ -8,12 +10,12 @@ using namespace std;
 #define MYPORT 3490
 #define BACKLOG 10
 
-main(){ 
+int main(){ 
 
     int sockfd, new_fd;
     struct sockaddr_in my_addr;
     struct sockaddr_in their_addr;
-    int sin_size; 
+    socklen_t sin_size; 
     sockfd = socket(PF_INET, SOCK_STREAM, 0);  
     my_addr.sin_family = AF_INET;        
 
@@ -42,10 +44,10 @@ main(){
         return 0;
     }
 
-    char *msg = "hello!";
+    const char *msg = "hello!";
     int len, bytes_sent; 
     len = strlen(msg); 
-    bytes_sent = send(new_fd, msg, len 0);
+    bytes_sent = send(new_fd, msg, len, 0);
 
     char buf[100];
     int bytes_recieved = recv(new_fd, buf, sizeof(buf)-1, 0);
