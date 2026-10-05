@@ -1,3 +1,5 @@
+#include <iostream>
+#include <unistd.h>
 #include <string.h> 
 #include <sys/types.h> 
 #include <sys/socket.h> 
@@ -32,7 +34,7 @@ int main(){
         cout << "Client recieved : " << buffer << '\n';
     }  
 
-    char *msg = "Hi!";
+    const char *msg = "Hi!";
     int len, bytes_sent; 
     len = strlen(msg); 
     bytes_sent = send(sockfd, msg, len, 0);
