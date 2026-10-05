@@ -4,6 +4,7 @@
 #include <sys/types.h> 
 #include <sys/socket.h> 
 #include <netinet/in.h> 
+#include <arpa/inet.h>
 
 using namespace std;
 
@@ -22,6 +23,8 @@ int main(){
     
     if(connect(sockfd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))==-1){
         cout << "Error in connecting to server\n";
+        close(sockfd);
+        return 0;
     }
     
     char buffer[100];
