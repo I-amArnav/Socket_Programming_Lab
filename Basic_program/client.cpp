@@ -9,6 +9,8 @@
 using namespace std;
 
 #define DEST_PORT 3490
+#define DEST_IP "127.0.0.1"
+
 int main(){
 
     int sockfd; 
@@ -17,7 +19,7 @@ int main(){
     sockfd = socket(PF_INET, SOCK_STREAM, 0); 
     dest_addr.sin_family = AF_INET; // host byte order 
     dest_addr.sin_port = htons(DEST_PORT); // network byte order 
-    dest_addr.sin_addr.s_addr = inet_addr(INADDR_ANY); // automatically fill with my IP
+    dest_addr.sin_addr.s_addr = inet_addr(DEST_IP); // automatically fill with my IP
     memset(&(dest_addr.sin_zero), '\0', 8); // zero the rest of the struct 
     
     if(connect(sockfd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))==-1){
