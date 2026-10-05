@@ -20,14 +20,27 @@ main(){
     my_addr.sin_port = htons(MYPORT);
     my_addr.sin_addr.s_addr = INADDR_ANY;
     memset(&(my_addr.sin_zero), '\0', 8);
-    // don't forget your error checking for these calls: 
+
     if(bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) == -1){
-        
+        cout<<"Error on bind\n";
         close(sockfd);
+        return 0;
     } 
-    listen(sockfd, BACKLOG); 
+
+    if(listen(sockfd, BACKLOG) == -1){
+        cout<<"Error on listen\n";
+        close(sockfd);
+        return 0;
+    }
+
     sin_size = sizeof(struct sockaddr_in); 
     new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+
+    if(new_fd == -1){
+        cout<<"Error on accept\n";
+        close(sockfd);
+        return 0;
+    }
 
     char *msg = "hello!";
     int len, bytes_sent; 
