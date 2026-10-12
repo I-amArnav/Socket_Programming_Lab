@@ -141,12 +141,20 @@ int main( int argc, char *argv[] ){
         id++;
     }
     
-    // while(id<num_nodes){
-    //     char buf[100];
-    //     int bytes_recieved = recv(new_fd[id], buf, sizeof(buf)-1, 0);
-    //     buf[bytes_recieved] = '\0';
-    //     cout << "Server recieved : " << buf << '\n';
-    // }
+    while(id<num_nodes){
+        CONNECT_MSG connect_msg;
+        int bytes_recieved = recv(new_fd[id], &connect_msg, sizeof(connect_msg), 0);
+        if(bytes_recieved < 0){
+            cout << "Error in receiving data from node " << id_to_char(id) << "\n";
+        }else if(bytes_recieved == 0){
+            cout << "Node " << id_to_char(id) << " closed the connection\n";
+        }else{
+            Node_info[id] = {connect_msg.ip, connect_msg.port};
+        }
+        id++;
+    }
+
+
 
     // const char *msg = "hello!";
     // int len, bytes_sent; 
