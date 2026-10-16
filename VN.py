@@ -2,6 +2,25 @@ import sys
 import socket
 import struct
 import select
+import time
+
+def create_lsp_pkt(id, seq_num, neighbors) :
+    header = struct.pack("!cIB", id.encode('utf-8'), seq_num, len(neighbors))
+    body = bytearray()
+    for n_id, data in neighbors.items() :
+        cost = data['cost'] if isinstance(data, dict) else data
+        body.extend(struct.pack("!ci", n_id.encode('utf-8'), cost))
+    return header+body
+
+def flood_lsp(sock, pkt_bytes, neighbors, exclude_ip_port=None) :
+    for n_id, n_info in neighbors.items() :
+        target = (n_info['ip'], n_info['port'])
+        if exclude_ip_port == target :
+            continue
+        try :
+            sock.sendto(pkt_bytes, target)
+        except Exception as e :
+            print(f"Error sending LSP to {n_id} : {e}")
 
 def main():
     if len(sys.argv) != 4 :
@@ -38,26 +57,102 @@ def main():
         sys.exit(1)
 
     inputs = [tcp_sock, udp_sock]
+    my_abet = None
+    my_neighbors = None
+    lsp = {}
+    my_seq_no = 0
+
+    last_lsp_time = time.time()
+    last_print_time = time.time()
+    lsp_interval = 10.0
+    print_interval = 20.0
 
     while True :
         try:
-            recieved, _, _ = select.select(inputs, [], [], 2.0)
+            curr_time = time.time()
+
+            if curr_time - last_lsp_time >= lsp_interval:
+                if my_abet and my_neighbors:
+                    my_seq_no += 1
+                    lsp[my_abet] = {'seq' : my_seq_no, 'neighbors' : my_neighbors}
+                    pkt_bytes = create_lsp_pkt(my_abet, my_seq_no, my_neighbors)
+                    flood_lsp(udp_sock, pkt_bytes, my_neighbors)
+                    print(f"Sent periodic LSP (Seq : {my_seq_no})")
+                last_lsp_time = curr_time
+
+            if curr_time - last_print_time >= print_interval:
+                if my_abet:
+                    print("--- Current Known Graph ---")
+                    for node, info in sorted(lsp.items()):
+                        neigh_str = ", ".join([f"{n}={c}" for n, c in info['neighbors'].items()])
+                        print(f"Node {node} (Seq {info['seq']}): {neigh_str}")
+                    print("-" * 30)
+                last_print_time = curr_time
+
+            next_event = min(lsp_interval - (curr_time - last_lsp_time), print_interval - (curr_time - last_print_time))
+            timeout = max(0.1, next_event)
+
+            recieved, _, _ = select.select(inputs, [], [], timeout)
+
+            if not recieved :
+                continue
+
             for s in recieved :
                 if s is tcp_sock :
                     data = tcp_sock.recv(1024)
-                    if data:
-                        tuple_sz = struct.calcsize("!ci")
-                        num = len(data)//tuple_sz
-                        info = []
-                        for i in range(num):
-                            chunk = data[i*tuple_sz : (i+1)*tuple_sz]
-                            raw, cost = struct.unpack("!ci", chunk)
-                            alpha = raw.decode('utf-8')
-                            info.append(f"{alpha}={cost}")
-                        print(", ".join(info))
+                    if not data:
+                        print("Oracle Node closed connection.")
+                        break
+                    
+                    tuple_sz = struct.calcsize("!c4sHi")
+                    num = len(data)//tuple_sz
+                    info = []
+                    curr_neighbors = {}
+
+                    for i in range(num):
+                        chunk = data[i*tuple_sz : (i+1)*tuple_sz]
+                        raw, ip_bytes, port, cost = struct.unpack("!c4sHi", chunk)
+                        alpha = raw.decode('utf-8')
+                        ip_str = socket.inet_ntoa(ip_bytes)
+                        info.append(f"{alpha}={cost}")
+                        if(cost==0):
+                            my_abet = alpha
+                        else:
+                            curr_neighbors[alpha] = {'ip' : ip_str, 'port' : port, 'cost' : cost}
+                    my_neighbors = curr_neighbors
+                    print(f"Updated Link-State from ON: {', '.join(info)}")
+
+                    if my_abet :
+                        my_seq_no += 1
+                        lsp[my_abet] = {'seq' : my_seq_no, 'neighbors' : my_neighbors}
+                        pkt_bytes = create_lsp_pkt(my_abet, my_seq_no, my_neighbors)
+                        flood_lsp(udp_sock, pkt_bytes, my_neighbors)
 
                 elif s is udp_sock :
-                    pass
+                    pkt, addr = udp_sock.recvfrom(2048)
+                    header_fmt = "!cIB"
+                    header_sz = struct.calcsize(header_fmt)
+                    if len(pkt) < header_sz :
+                        continue
+                    idraw, seq_num, num = struct.unpack(header_fmt, pkt[:header_sz])
+                    id = idraw.decode('utf-8')
+                    neigh_fmt = "!ci"
+                    neigh_sz = struct.calcsize(neigh_fmt)
+                    offset = header_sz
+                    neighbors = {}
+
+                    for _ in range(num) :
+                        if offset + neigh_sz > len(pkt) :
+                            break
+                        n_bytes, n_cost = struct.unpack(neigh_fmt, pkt[offset : offset+neigh_sz])
+                        neighbors[n_bytes.decode('utf-8')] = n_cost
+                        offset += neigh_sz
+
+                    if id not in lsp or seq_num > lsp[id]['seq'] :
+                        print(f"Newer LSP received from node {id} (Seq: {seq_num})")
+                        lsp[id] = {'seq' : seq_num, 'neighbors' : neighbors}
+                        pkt_bytes = create_lsp_pkt(id, seq_num, neighbors)
+                        flood_lsp(udp_sock, pkt_bytes, my_neighbors, addr)
 
         except Exception as e :
             print(f"Error in communications : {e}")
