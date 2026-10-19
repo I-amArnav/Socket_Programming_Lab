@@ -98,33 +98,42 @@ def main():
                 continue
 
             for s in recieved :
-                if s is tcp_sock :
+                if s is tcp_sock:
                     data = tcp_sock.recv(1024)
                     if not data:
                         print("Oracle Node closed connection.")
                         break
-                    
+                    if len(data) < 1:
+                        continue
+                    num = data[0]
                     tuple_sz = struct.calcsize("!c4sHi")
-                    num = len(data)//tuple_sz
                     info = []
                     curr_neighbors = {}
-
-                    for i in range(num):
-                        chunk = data[i*tuple_sz : (i+1)*tuple_sz]
+                    offset = 1
+                    
+                    for _ in range(num):
+                        if offset + tuple_sz > len(data):
+                            break
+                            
+                        chunk = data[offset : offset + tuple_sz]
                         raw, ip_bytes, port, cost = struct.unpack("!c4sHi", chunk)
                         alpha = raw.decode('utf-8')
                         ip_str = socket.inet_ntoa(ip_bytes)
                         info.append(f"{alpha}={cost}")
-                        if(cost==0):
+                        
+                        if cost == 0:
                             my_abet = alpha
                         else:
-                            curr_neighbors[alpha] = {'ip' : ip_str, 'port' : port, 'cost' : cost}
+                            curr_neighbors[alpha] = {'ip': ip_str, 'port': port, 'cost': cost}
+                            
+                        offset += tuple_sz
+                        
                     my_neighbors = curr_neighbors
                     print(f"Updated Link-State from ON: {', '.join(info)}")
 
-                    if my_abet :
+                    if my_abet:
                         my_seq_no += 1
-                        lsp[my_abet] = {'seq' : my_seq_no, 'neighbors' : my_neighbors}
+                        lsp[my_abet] = {'seq': my_seq_no, 'neighbors': my_neighbors}
                         pkt_bytes = create_lsp_pkt(my_abet, my_seq_no, my_neighbors)
                         flood_lsp(udp_sock, pkt_bytes, my_neighbors)
 
