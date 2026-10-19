@@ -67,7 +67,10 @@ def main():
     lsp_interval = 10.0
     print_interval = 20.0
 
+    niklo = False
     while True :
+        if niklo :
+            break
         try:
             curr_time = time.time()
 
@@ -102,6 +105,7 @@ def main():
                     data = tcp_sock.recv(1024)
                     if not data:
                         print("Oracle Node closed connection.")
+                        niklo = True
                         break
                     if len(data) < 1:
                         continue
