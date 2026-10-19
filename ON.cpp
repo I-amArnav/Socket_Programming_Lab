@@ -80,7 +80,7 @@ bool send_exact(int sockfd, uint8_t* buffer, int num_bytes){
         if(result < 0){
             return false;
         }else if(result == 0){
-            return false;
+            return false; //connection closed
         }
         bytes_sent += result;
     }
@@ -176,7 +176,6 @@ int main( int argc, char *argv[] ){
     }
     int num_nodes = build_virtual_network(valid_lines);
 
-
     int id = 0; // start listening with A
 
     int sockfd, new_fd[num_nodes];
@@ -187,6 +186,8 @@ int main( int argc, char *argv[] ){
     if( sockfd == -1){
         cout<<"Error creating socket\n";
         return 0;
+    }else{
+        cout << "Socket created successfully\n";
     }
     my_addr.sin_family = AF_INET;        
     my_addr.sin_port = htons(MYPORT);
@@ -198,16 +199,20 @@ int main( int argc, char *argv[] ){
         cout<<"Error on bind\n";
         close(sockfd);
         return 0;
-    } 
+    }else{
+        cout << "bind succeeded\n";
+    }
 
     if(listen(sockfd, BACKLOG) == -1){
         cout<<"Error on listen\n";
         close(sockfd);
         return 0;
+    }else{
+        cout << "Ha hum sun rahe hai...\n";
     }
 
     while(id<num_nodes){
-        cout << "Waiting for connection from node " << id_to_char(id) << "...\n";
+        cout << "Yo! node " << id_to_char(id) << " :) ...\n";
         sin_size = sizeof(struct sockaddr_in); 
         new_fd[id] = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 
@@ -215,6 +220,8 @@ int main( int argc, char *argv[] ){
             cout<<"Error on accept\n";
             close(sockfd);
             return 0;
+        }else{
+            cout << "Let's stay connected, node " << id_to_char(id) << " :D\n";
         }
         id++;
     }
@@ -256,7 +263,7 @@ int main( int argc, char *argv[] ){
             continue;
         }
         if(old_virtual_network != Virtual_network){
-            cout << "Virtual network changed, sending updated link state messages...\n";
+            cout << "Pados me badlaav, khabar failaani padegi :))...\n";
             if(!send_link_state_msgs(num_nodes, new_fd)){
                 cout << "Error sending link state messages\n";
                 break;
