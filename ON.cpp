@@ -14,19 +14,78 @@ using namespace std;
 #define MYPORT 5000
 #define BACKLOG 26
 #define MY_IP "172.20.87.112"
+#define BUFFER_SIZE (1 + 26 * 11) // 1 byte for number of neighbors, 11 bytes for each neighbor (1+4+2+4)
 
-struct CONNECT_MSG{
-    uint32_t ip;
-    uint16_t port;
-};
+// cpp is including padding so I'm using buffer to send and receive data
+// struct CONNECT_MSG{
+//     uint32_t ip;
+//     uint16_t port;
+// };
 
-struct LINK_STATE_MSG{
-    uint8_t alphabet;
-    uint32_t cost;
-};
+// struct LINK_STATE_MSG{
+//     uint8_t alphabet;
+//     uint32_t ip;
+//     uint16_t port;
+//     uint32_t cost;
+// };
 
 vector<vector<int>> Virtual_network(26, vector<int>(26, -1));
 vector<pair<uint32_t, uint16_t>> Node_info(26); // ip, port
+
+int Link_State_Msg(int id, uint8_t *buffer){
+    int num_nei = 0;
+    int prefix_len = 1; // the first byte is for the number of neighbors/tuples
+    // 1 B for alphabet, 4 B for ip, 2 B for port, 4 B for cost
+    for(int i=0; i<Virtual_network[id].size(); i++){
+        if(Virtual_network[id][i] != -1){
+            uint32_t ip = Node_info[i].first;
+            uint16_t port = Node_info[i].second;
+            uint32_t cost = Virtual_network[id][i];
+            buffer[prefix_len+num_nei*11] = 'A' + i; // alphabet
+            buffer[prefix_len+num_nei*11+1] = (ip >> 24) & 0xFF; // ip
+            buffer[prefix_len+num_nei*11+2] = (ip >> 16) & 0xFF;
+            buffer[prefix_len+num_nei*11+3] = (ip >> 8) & 0xFF;
+            buffer[prefix_len+num_nei*11+4] = ip & 0xFF;
+            buffer[prefix_len+num_nei*11+5] = (port >> 8) & 0xFF; // port
+            buffer[prefix_len+num_nei*11+6] = port & 0xFF;
+            buffer[prefix_len+num_nei*11+7] = (cost >> 24) & 0xFF; // cost
+            buffer[prefix_len+num_nei*11+8] = (cost >> 16) & 0xFF;
+            buffer[prefix_len+num_nei*11+9] = (cost >> 8) & 0xFF;
+            buffer[prefix_len+num_nei*11+10] = cost & 0xFF;
+            num_nei++;  
+        }
+    }
+    buffer[0] = num_nei; 
+    return prefix_len + num_nei * 11;
+}
+
+bool recv_exact(int sockfd, uint8_t* buffer, int num_bytes){
+    int bytes_received = 0;
+    while(bytes_received < num_bytes){
+        int result = recv(sockfd, buffer + bytes_received, num_bytes - bytes_received, 0);
+        if(result < 0){
+            return false;
+        }else if(result == 0){
+            return false;
+        }
+        bytes_received += result;
+    }
+    return true;
+}
+
+bool send_exact(int sockfd, uint8_t* buffer, int num_bytes){
+    int bytes_sent = 0;
+    while(bytes_sent < num_bytes){
+        int result = send(sockfd, buffer + bytes_sent, num_bytes - bytes_sent, 0);
+        if(result < 0){
+            return false;
+        }else if(result == 0){
+            return false;
+        }
+        bytes_sent += result;
+    }
+    return true;
+}
 
 char id_to_char(int id){
     return 'A' + id;
@@ -38,9 +97,11 @@ int char_to_id(char c){
 
 int build_virtual_network(vector<string> &valid_lines){
     
+    Virtual_network.assign(26, vector<int>(26, -1));
     int num_nodes = valid_lines.size()+1;
 
-    for(int id1 =0; id1<num_nodes; id1++){
+    for(int id1 =0; id1<num_nodes-1; id1++){
+        Virtual_network[id1][id1] = 0;
         string line = valid_lines[id1];
         int id2 = id1+1;
         for(long unsigned i=0; i<line.size(); i++){
@@ -61,8 +122,9 @@ int build_virtual_network(vector<string> &valid_lines){
                     i--;
                 }else continue;
             }
+            id2++;
         }
-        id2++;
+        Virtual_network[num_nodes-1][num_nodes-1] = 0;
     }
     return num_nodes;
 }
@@ -87,13 +149,25 @@ int parse_config_file(string filename, vector<string> &valid_lines){
     return 0;
 }
 
+bool send_link_state_msgs(int num_nodes, int new_fd[]){
+    int id = 0;
+    while(id<num_nodes){
+        uint8_t LS_Msg[BUFFER_SIZE]; 
+        int msg_size = Link_State_Msg(id, LS_Msg);
+        if(!send_exact(new_fd[id], LS_Msg, msg_size)){
+            return false;
+        }
+        id++;
+    }
+    return true;
+}
+
 int main( int argc, char *argv[] ){ 
 
     if(argc!=2){
         cout<<"Usage: " << argv[0] << "<config.txt>\n";
         return 0;
     }
-
 
     vector<string> valid_lines;
 
@@ -109,7 +183,11 @@ int main( int argc, char *argv[] ){
     struct sockaddr_in my_addr;
     struct sockaddr_in their_addr;
     socklen_t sin_size; 
-    sockfd = socket(PF_INET, SOCK_STREAM, 0);  
+    sockfd = socket(PF_INET, SOCK_STREAM, 0);
+    if( sockfd == -1){
+        cout<<"Error creating socket\n";
+        return 0;
+    }
     my_addr.sin_family = AF_INET;        
     my_addr.sin_port = htons(MYPORT);
     my_addr.sin_addr.s_addr = inet_addr(MY_IP);
@@ -141,30 +219,55 @@ int main( int argc, char *argv[] ){
         id++;
     }
     
+    id = 0;
     while(id<num_nodes){
-        CONNECT_MSG connect_msg;
-        int bytes_recieved = recv(new_fd[id], &connect_msg, sizeof(connect_msg), 0);
-        if(bytes_recieved < 0){
-            cout << "Error in receiving data from node " << id_to_char(id) << "\n";
-        }else if(bytes_recieved == 0){
-            cout << "Node " << id_to_char(id) << " closed the connection\n";
-        }else{
-            Node_info[id] = {connect_msg.ip, connect_msg.port};
+        uint8_t connect_msg[6]; // 4 bytes for ip, 2 bytes for port
+        if(!recv_exact(new_fd[id], connect_msg, sizeof(connect_msg))){
+            cout << "Error receiving connection message from node " << id_to_char(id) << "\n";
+            close(sockfd);
+            return 0;
         }
+        uint32_t ip = (static_cast<uint32_t>(connect_msg[0]) << 24) | (static_cast<uint32_t>(connect_msg[1]) << 16) | (static_cast<uint32_t>(connect_msg[2]) << 8)  | static_cast<uint32_t>(connect_msg[3]);
+        uint16_t port = (static_cast<uint16_t>(connect_msg[4]) << 8) | static_cast<uint16_t>(connect_msg[5]);
+        Node_info[id] = {ip, port};
         id++;
     }
+    
+    if(!send_link_state_msgs(num_nodes, new_fd)){
+        cout << "Error sending link state messages\n";
+        close(sockfd);
+        for(int i=0; i<num_nodes; i++){
+            close(new_fd[i]);
+        }  
+        return 0;
+    }
 
-
-
-    // const char *msg = "hello!";
-    // int len, bytes_sent; 
-    // len = strlen(msg); 
-    // bytes_sent = send(new_fd[id], msg, len, 0);
-
+    while(true){
+        sleep(1);
+        valid_lines.clear();
+        if(parse_config_file(argv[1], valid_lines) == -1){
+            cout << "Error parsing config file, retrying...\n";
+            continue;
+        }
+        auto old_virtual_network = Virtual_network;
+        if(build_virtual_network(valid_lines) != num_nodes){
+            cout << "Number of nodes changed, ignoring this configuration...\n";
+            Virtual_network = old_virtual_network;
+            continue;
+        }
+        if(old_virtual_network != Virtual_network){
+            cout << "Virtual network changed, sending updated link state messages...\n";
+            if(!send_link_state_msgs(num_nodes, new_fd)){
+                cout << "Error sending link state messages\n";
+                break;
+            }
+        }
+    }
     
 
     close(sockfd);
-    for(int i=0; i<num_nodes; i++)
+    for(int i=0; i<num_nodes; i++){
         close(new_fd[i]);
+    }  
     return 0;
 }
