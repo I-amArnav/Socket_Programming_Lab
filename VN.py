@@ -37,7 +37,10 @@ def main():
         print(f"error binding socket to own UDP port : {e}")
         sys.exit(1)
 
-    own_ip = socket.gethostbyname(socket.gethostname())
+    if sys.platform.startswith("linux"):
+        own_ip = "10.53.2.185"  # ON laptop's Windows Wi-Fi IP
+    else:
+        own_ip = socket.gethostbyname(socket.gethostname())
     print(f"VN initialized")
 
     tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
