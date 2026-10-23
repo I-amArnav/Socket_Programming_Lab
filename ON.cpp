@@ -225,6 +225,7 @@ int main( int argc, char *argv[] ){
         close(sockfd);
         return 0;
     }
+    cout << "Using local IP: " << local_ip << "\n";
     
     my_addr.sin_family = AF_INET;        
     my_addr.sin_port = htons(MYPORT);

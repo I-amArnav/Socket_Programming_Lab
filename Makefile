@@ -1,6 +1,4 @@
-
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17
 
 ON = ON
 ON_SRC = ON.cpp
@@ -10,7 +8,7 @@ ON_SRC = ON.cpp
 all: $(ON)
 
 $(ON): $(ON_SRC)
-	$(CXX) $(CXXFLAGS) $(ON_SRC) -o $(ON)
+	$(CXX) $(ON_SRC) -o $(ON)
 
 # Usage: make run-on CONFIG=my_config.txt
 run-on: $(ON)
