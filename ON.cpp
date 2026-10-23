@@ -13,7 +13,6 @@ using namespace std;
 
 #define MYPORT 5000
 #define BACKLOG 26
-#define MY_IP "10.130.154.63"
 #define BUFFER_SIZE (1 + 26 * 11) // 1 byte for number of neighbors, 11 bytes for each neighbor (1+4+2+4)
 
 // cpp is including padding so I'm using buffer to send and receive data
@@ -36,7 +35,7 @@ int Link_State_Msg(int id, uint8_t *buffer){
     int num_nei = 0;
     int prefix_len = 1; // the first byte is for the number of neighbors/tuples
     // 1 B for alphabet, 4 B for ip, 2 B for port, 4 B for cost
-    for(int i=0; i<Virtual_network[id].size(); i++){
+    for(int i=0; i<int(Virtual_network[id].size()); i++){
         if(Virtual_network[id][i] != -1){
             uint32_t ip = Node_info[i].first;
             uint16_t port = Node_info[i].second;
@@ -119,7 +118,7 @@ int build_virtual_network(vector<string> &valid_lines){
         Virtual_network[id1][id1] = 0;
         string line = valid_lines[id1];
         int id2 = id1+1;
-        for(long unsigned i=0; i<line.size(); i++){
+        for(int i=0; i<int(line.size()); i++){
             char c = line[i];
             if(c == '\t' || c == ' ' || c == '\r' || c == '\n'){
                 continue;
@@ -127,7 +126,7 @@ int build_virtual_network(vector<string> &valid_lines){
                 i++;
             }else{
                 int start = i;
-                while(i<line.size() && (line[i]>='0' && line[i]<='9')){
+                while(i<int(line.size()) && (line[i]>='0' && line[i]<='9')){
                     i++;
                 }
                 if(i>start){
@@ -167,7 +166,7 @@ int parse_config_file(string filename, vector<string> &valid_lines){
 int main( int argc, char *argv[] ){ 
 
     if(argc!=2){
-        cout<<"Usage: " << argv[0] << "<config.txt>\n";
+        cout<<"Usage: " << argv[0] << " <config.txt>\n";
         return 0;
     }
 
@@ -193,7 +192,7 @@ int main( int argc, char *argv[] ){
     }
     my_addr.sin_family = AF_INET;        
     my_addr.sin_port = htons(MYPORT);
-    my_addr.sin_addr.s_addr = inet_addr(MY_IP);
+    my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     memset(&(my_addr.sin_zero), '\0', 8);
     // cout << inet_ntoa(my_addr.sin_addr);
 

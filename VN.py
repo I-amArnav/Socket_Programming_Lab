@@ -25,12 +25,13 @@ def flood_lsp(sock, pkt_bytes, neighbors, exclude_ip_port=None) :
             print(f"Error sending LSP to {n_id} : {e}")
 
 def main():
-    if len(sys.argv) != 4 :
-        print("Usage: python3 VN.py ON_IP ON_PORT OWN_UDP_PORT")
+    if len(sys.argv) != 5 :
+        print("Usage: python3 VN.py ON_IP ON_PORT OWN_IP OWN_UDP_PORT")
         sys.exit(1)
     on_ip = sys.argv[1]
     on_port = int(sys.argv[2])
-    own_udp_port = int(sys.argv[3])
+    own_ip = sys.argv[3]
+    own_udp_port = int(sys.argv[4])
 
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -39,10 +40,6 @@ def main():
         print(f"error binding socket to own UDP port : {e}")
         sys.exit(1)
 
-    if sys.platform.startswith("linux"):
-        own_ip = "10.130.154.63"  # ON laptop's Windows Wi-Fi IP
-    else:
-        own_ip = socket.gethostbyname(socket.gethostname())
     print(f"VN initialized")
 
     tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -50,6 +47,7 @@ def main():
         tcp_sock.connect((on_ip, on_port))
     except Exception as e:
         print(f"Error connecting to ON")
+        sys.exit(1)
 
     try:
         ip_temp = socket.inet_aton(own_ip)

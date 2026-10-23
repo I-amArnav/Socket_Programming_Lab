@@ -16,7 +16,7 @@ $(ON): $(ON_SRC)
 run-on: $(ON)
 	./$(ON) $(CONFIG)
 
-# Usage: make run-vn ARGS="10.53.2.185 5000 5001"
+# Usage: make run-vn ARGS="10.53.2.185 5000 10.53.2.186 5001"
 run-vn:
 	python3 VN.py $(ARGS)
 
