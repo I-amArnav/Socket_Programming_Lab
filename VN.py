@@ -3,6 +3,8 @@ import socket
 import struct
 import select
 import time
+import signal
+
 
 def create_lsp_pkt(id, seq_num, neighbors) :
     header = struct.pack("!cIB", id.encode('utf-8'), seq_num, len(neighbors))
@@ -38,7 +40,7 @@ def main():
         sys.exit(1)
 
     if sys.platform.startswith("linux"):
-        own_ip = "10.53.2.185"  # ON laptop's Windows Wi-Fi IP
+        own_ip = "10.130.154.63"  # ON laptop's Windows Wi-Fi IP
     else:
         own_ip = socket.gethostbyname(socket.gethostname())
     print(f"VN initialized")
@@ -58,6 +60,15 @@ def main():
         print(f"Error in sending CONNECT")
         tcp_sock.close()
         sys.exit(1)
+
+    def handle_sigint(signum, frame):
+        print("\nCtrl+C detected!")
+        print("Performing cleanup before exiting...")
+        tcp_sock.close()
+        udp_sock.close()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_sigint)
 
     inputs = [tcp_sock, udp_sock]
     my_abet = None

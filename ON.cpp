@@ -13,7 +13,7 @@ using namespace std;
 
 #define MYPORT 5000
 #define BACKLOG 26
-#define MY_IP "172.20.87.112"
+#define MY_IP "10.130.154.63"
 #define BUFFER_SIZE (1 + 26 * 11) // 1 byte for number of neighbors, 11 bytes for each neighbor (1+4+2+4)
 
 // cpp is including padding so I'm using buffer to send and receive data
@@ -78,11 +78,26 @@ bool send_exact(int sockfd, uint8_t* buffer, int num_bytes){
     while(bytes_sent < num_bytes){
         int result = send(sockfd, buffer + bytes_sent, num_bytes - bytes_sent, 0);
         if(result < 0){
+            cout << "Error in sending message to one of the nodes\n";
             return false;
         }else if(result == 0){
+            cout << "Connection closed by one of the nodes\n";
             return false; //connection closed
         }
         bytes_sent += result;
+    }
+    return true;
+}
+
+bool send_link_state_msgs(int num_nodes, int new_fd[]){
+    int id = 0;
+    while(id<num_nodes){
+        uint8_t LS_Msg[BUFFER_SIZE]; 
+        int msg_size = Link_State_Msg(id, LS_Msg);
+        if(!send_exact(new_fd[id], LS_Msg, msg_size)){
+            return false;
+        }
+        id++;
     }
     return true;
 }
@@ -147,19 +162,6 @@ int parse_config_file(string filename, vector<string> &valid_lines){
         valid_lines.push_back(line.substr(pos));
     }
     return 0;
-}
-
-bool send_link_state_msgs(int num_nodes, int new_fd[]){
-    int id = 0;
-    while(id<num_nodes){
-        uint8_t LS_Msg[BUFFER_SIZE]; 
-        int msg_size = Link_State_Msg(id, LS_Msg);
-        if(!send_exact(new_fd[id], LS_Msg, msg_size)){
-            return false;
-        }
-        id++;
-    }
-    return true;
 }
 
 int main( int argc, char *argv[] ){ 
@@ -265,7 +267,6 @@ int main( int argc, char *argv[] ){
         if(old_virtual_network != Virtual_network){
             cout << "Pados me badlaav, khabar failaani padegi :))...\n";
             if(!send_link_state_msgs(num_nodes, new_fd)){
-                cout << "Error sending link state messages\n";
                 break;
             }
         }
