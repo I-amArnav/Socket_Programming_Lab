@@ -1,6 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <string.h> 
+#include <sys/select.h>
 #include <sys/types.h> 
 #include <sys/socket.h> 
 #include <netinet/in.h> 
@@ -89,7 +90,7 @@ int Link_State_Msg(int id, uint8_t *buffer){
 bool recv_exact(int sockfd, uint8_t* buffer, int num_bytes){
     int bytes_received = 0;
     while(bytes_received < num_bytes){
-        int result = recv(sockfd, buffer + bytes_received, num_bytes - bytes_received, 0);
+        int result = recv(sockfd, buffer + bytes_received, num_bytes - bytes_received, MSG_DONTWAIT);
         if(result < 0){
             return false;
         }else if(result == 0){
@@ -248,6 +249,8 @@ int main( int argc, char *argv[] ){
         cout << "Ha hum sun rahe hai...\n";
     }
 
+
+
     while(id<num_nodes){
         cout << "Yo! node " << id_to_char(id) << " :) ...\n";
         sin_size = sizeof(struct sockaddr_in); 
@@ -262,21 +265,43 @@ int main( int argc, char *argv[] ){
         }
         id++;
     }
-    
-    id = 0;
-    while(id<num_nodes){
-        uint8_t connect_msg[6]; // 4 bytes for ip, 2 bytes for port
-        if(!recv_exact(new_fd[id], connect_msg, sizeof(connect_msg))){
-            cout << "Error receiving connection message from node " << id_to_char(id) << "\n";
-            close(sockfd);
-            return 0;
-        }
-        uint32_t ip = (static_cast<uint32_t>(connect_msg[0]) << 24) | (static_cast<uint32_t>(connect_msg[1]) << 16) | (static_cast<uint32_t>(connect_msg[2]) << 8)  | static_cast<uint32_t>(connect_msg[3]);
-        uint16_t port = (static_cast<uint16_t>(connect_msg[4]) << 8) | static_cast<uint16_t>(connect_msg[5]);
-        Node_info[id] = {ip, port};
-        id++;
+
+    fd_set read_fds;
+    FD_ZERO(&read_fds);
+    int max_fd=0;
+    for(int i=0; i<num_nodes; i++){
+        FD_SET(new_fd[i],&read_fds);
+        max_fd= max(new_fd[i],max_fd);
     }
-    
+    int num_nodes_done = 0;
+    vector<bool> done(num_nodes,false);
+    while(num_nodes_done<num_nodes){
+        int result = select(max_fd+1, &read_fds, nullptr, nullptr, nullptr);
+        fd_set curr_read_fds = read_fds;
+        if(result> 0){
+            for(int id=0; id<num_nodes; id++){
+                if(FD_ISSET(new_fd[id],&read_fds)){
+                    uint8_t connect_msg[6]; // 4 bytes for ip, 2 bytes for port
+                    if(!recv_exact(new_fd[id], connect_msg, sizeof(connect_msg))){
+                        cout << "Error receiving connection message from node " << id_to_char(id) << "\n";
+                        close(sockfd);
+                        return 0;
+                    }
+                    uint32_t ip = (static_cast<uint32_t>(connect_msg[0]) << 24) | (static_cast<uint32_t>(connect_msg[1]) << 16) | (static_cast<uint32_t>(connect_msg[2]) << 8)  | static_cast<uint32_t>(connect_msg[3]);
+                    uint16_t port = (static_cast<uint16_t>(connect_msg[4]) << 8) | static_cast<uint16_t>(connect_msg[5]);
+                    Node_info[id] = {ip, port};
+                    num_nodes_done++;
+                    done[id]=true;
+                    FD_CLR(new_fd[id],&read_fds);
+                }else{
+                    if(!done[id]){
+                        FD_SET(new_fd[id],&read_fds);
+                    }
+                }
+            }
+        }
+    }
+
     if(!send_link_state_msgs(num_nodes, new_fd)){
         cout << "Error sending link state messages\n";
         close(sockfd);
